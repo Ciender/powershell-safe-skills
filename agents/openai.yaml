@@ -1,4 +1,4 @@
 interface:
-  display_name: "PowerShell Safe Invocation"
+  display_name: "PowerShell Safe Skills"
   short_description: "Safe Windows PowerShell automation"
-  default_prompt: "Use $powershell-safe-invocation to run this Windows PowerShell command safely."
+  default_prompt: "Use $powershell-safe-skills to run this Windows PowerShell command safely."

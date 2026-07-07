@@ -1,9 +1,9 @@
 ---
-name: powershell-safe-invocation
+name: powershell-safe-skills
 description: Use when writing or running PowerShell on Windows, especially native programs, quoted paths, escaping, pwsh vs powershell.exe, Start-Process, ProcessStartInfo, file operations, SSH/WSL/Bash calls, JSON/regex quoting, encoding/BOM/Chinese text, running exe locks, mapped drives, or shell troubleshooting.
 ---
 
-# PowerShell Safe Invocation
+# PowerShell Safe Skills
 
 Use this skill as a compact execution checklist for PowerShell-driven automation. Preserve argument boundaries; do not squeeze structured commands into nested quoted strings.
 
