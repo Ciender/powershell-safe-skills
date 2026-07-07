@@ -1,6 +1,6 @@
 ---
 name: powershell-safe-skills
-description: Use when writing or running PowerShell on Windows, especially native programs, quoted paths, escaping, pwsh vs powershell.exe, Start-Process, ProcessStartInfo, file operations, SSH/WSL/Bash calls, JSON/regex quoting, encoding/BOM/Chinese text, running exe locks, mapped drives, or shell troubleshooting.
+description: Use when writing or running PowerShell automation on Windows, primarily PowerShell 7+ via pwsh.exe with compatibility checks for Windows PowerShell 5.1, especially native programs, quoted paths, escaping, Start-Process, ProcessStartInfo, file operations, SSH/WSL/Bash calls, JSON/regex quoting, encoding/BOM/Chinese text, running exe locks, mapped drives, or shell troubleshooting.
 ---
 
 # PowerShell Safe Skills
@@ -21,7 +21,7 @@ Choose the first safe option that fits:
 
 ## Verify The Shell
 
-Prefer PowerShell 7 through `pwsh.exe` unless Windows PowerShell 5.1 is explicitly required.
+Assume PowerShell 7+ through `pwsh.exe` is the preferred runtime. Use Windows PowerShell 5.1 through `powershell.exe` only when explicitly required, and verify syntax because cmdlet parameters and native argument behavior can differ.
 
 ```powershell
 $PSVersionTable.PSVersion
