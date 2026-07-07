@@ -4,27 +4,34 @@
 
 ## Format
 
-This repository is a **single-skill repository**. The repository root is the skill directory:
+This repository uses a **multi-skill-compatible layout** even though it currently contains one skill:
 
 ```text
 .
-├── SKILL.md
-├── agents/
-│   └── openai.yaml
-└── references/
-    ├── native-commands.md
-    ├── cmdlets-filesystem.md
-    ├── cross-shell.md
-    ├── process-encoding.md
-    └── diagnostics.md
+├── README.md
+└── skills/
+    └── powershell-safe-skills/
+        ├── SKILL.md
+        ├── agents/
+        │   └── openai.yaml
+        └── references/
+            ├── native-commands.md
+            ├── cmdlets-filesystem.md
+            ├── cross-shell.md
+            ├── process-encoding.md
+            └── diagnostics.md
 ```
 
-This matches the Agent Skills shape used by Codex and Claude Code: a skill is a folder containing `SKILL.md`, with optional supporting directories such as `references/`, `scripts/`, `assets/`, and product-specific metadata such as `agents/openai.yaml`.
-
-Because this is a single-skill repository, `SKILL.md` is at the repository root. If you later embed it into a multi-skill repository, place it under:
+The installable skill path is:
 
 ```text
-skills/powershell-safe-skills/
+skills/powershell-safe-skills
+```
+
+This keeps the GitHub repository readable while keeping the skill folder name aligned with the `SKILL.md` name:
+
+```yaml
+name: powershell-safe-skills
 ```
 
 ## PowerShell Version Scope
@@ -53,37 +60,47 @@ The core rules apply to both PowerShell 7+ and Windows PowerShell 5.1:
 
 ## Install In Codex
 
-Manual user install using the current Codex user-skill location:
-
-```powershell
-New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.agents\skills" | Out-Null
-git clone https://github.com/Ciender/powershell-safe-skills.git "$env:USERPROFILE\.agents\skills\powershell-safe-skills"
-```
-
-Repo-scoped install:
-
-```powershell
-New-Item -ItemType Directory -Force -Path '.agents\skills' | Out-Null
-git clone https://github.com/Ciender/powershell-safe-skills.git '.agents\skills\powershell-safe-skills'
-```
-
-Using the Codex skill installer, when your Codex build provides it:
+Using the Codex skill installer:
 
 ```powershell
 python "$env:USERPROFILE\.codex\skills\.system\skill-installer\scripts\install-skill-from-github.py" `
   --repo Ciender/powershell-safe-skills `
-  --path . `
-  --name powershell-safe-skills
+  --path skills/powershell-safe-skills
 ```
 
-Older/local Codex builds may use `$CODEX_HOME/skills` or `$env:USERPROFILE\.codex\skills`:
+Manual user install for Codex builds that scan `$env:USERPROFILE\.agents\skills`:
 
 ```powershell
-$dest = "$env:USERPROFILE\.codex\skills\powershell-safe-skills"
-git clone https://github.com/Ciender/powershell-safe-skills.git $dest
+$repo = Join-Path $env:TEMP 'powershell-safe-skills-repo'
+$dest = "$env:USERPROFILE\.agents\skills\powershell-safe-skills"
+
+Remove-Item -LiteralPath $repo -Recurse -Force -ErrorAction SilentlyContinue
+if (Test-Path -LiteralPath $dest) {
+    throw "Destination already exists: $dest"
+}
+
+git clone --depth 1 https://github.com/Ciender/powershell-safe-skills.git $repo
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dest) | Out-Null
+Copy-Item -LiteralPath (Join-Path $repo 'skills\powershell-safe-skills') -Destination $dest -Recurse
+Remove-Item -LiteralPath $repo -Recurse -Force
 ```
 
-Codex detects skill changes automatically in most cases. Restart Codex if the skill does not appear.
+Manual repo-scoped install for Codex builds that scan `.agents/skills`:
+
+```powershell
+$repo = Join-Path $env:TEMP 'powershell-safe-skills-repo'
+$dest = '.agents\skills\powershell-safe-skills'
+
+Remove-Item -LiteralPath $repo -Recurse -Force -ErrorAction SilentlyContinue
+if (Test-Path -LiteralPath $dest) {
+    throw "Destination already exists: $dest"
+}
+
+git clone --depth 1 https://github.com/Ciender/powershell-safe-skills.git $repo
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dest) | Out-Null
+Copy-Item -LiteralPath (Join-Path $repo 'skills\powershell-safe-skills') -Destination $dest -Recurse
+Remove-Item -LiteralPath $repo -Recurse -Force
+```
 
 Invoke explicitly in Codex with:
 
@@ -93,20 +110,40 @@ $powershell-safe-skills
 
 ## Install In Claude Code
 
-Claude Code loads custom skills from filesystem directories containing `SKILL.md`. The directory name is the slash command name, so clone this repository into a directory named `powershell-safe-skills`.
+Claude Code loads custom skills from filesystem directories containing `SKILL.md`. The directory name is the slash command name, so install the skill directory as `powershell-safe-skills`.
 
 Personal install:
 
 ```powershell
-New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.claude\skills" | Out-Null
-git clone https://github.com/Ciender/powershell-safe-skills.git "$env:USERPROFILE\.claude\skills\powershell-safe-skills"
+$repo = Join-Path $env:TEMP 'powershell-safe-skills-repo'
+$dest = "$env:USERPROFILE\.claude\skills\powershell-safe-skills"
+
+Remove-Item -LiteralPath $repo -Recurse -Force -ErrorAction SilentlyContinue
+if (Test-Path -LiteralPath $dest) {
+    throw "Destination already exists: $dest"
+}
+
+git clone --depth 1 https://github.com/Ciender/powershell-safe-skills.git $repo
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dest) | Out-Null
+Copy-Item -LiteralPath (Join-Path $repo 'skills\powershell-safe-skills') -Destination $dest -Recurse
+Remove-Item -LiteralPath $repo -Recurse -Force
 ```
 
 Project install:
 
 ```powershell
-New-Item -ItemType Directory -Force -Path '.claude\skills' | Out-Null
-git clone https://github.com/Ciender/powershell-safe-skills.git '.claude\skills\powershell-safe-skills'
+$repo = Join-Path $env:TEMP 'powershell-safe-skills-repo'
+$dest = '.claude\skills\powershell-safe-skills'
+
+Remove-Item -LiteralPath $repo -Recurse -Force -ErrorAction SilentlyContinue
+if (Test-Path -LiteralPath $dest) {
+    throw "Destination already exists: $dest"
+}
+
+git clone --depth 1 https://github.com/Ciender/powershell-safe-skills.git $repo
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dest) | Out-Null
+Copy-Item -LiteralPath (Join-Path $repo 'skills\powershell-safe-skills') -Destination $dest -Recurse
+Remove-Item -LiteralPath $repo -Recurse -Force
 ```
 
 Invoke explicitly in Claude Code with:
@@ -122,7 +159,7 @@ Claude Code uses `SKILL.md` and `references/`. The `agents/openai.yaml` file is 
 From the repository root:
 
 ```powershell
-python "$env:USERPROFILE\.codex\skills\.system\skill-creator\scripts\quick_validate.py" .
+python "$env:USERPROFILE\.codex\skills\.system\skill-creator\scripts\quick_validate.py" '.\skills\powershell-safe-skills'
 ```
 
 Expected result:
