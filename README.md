@@ -2,9 +2,9 @@
 
 `powershell-safe-skills` is an Agent Skill for safe Windows PowerShell automation. It focuses on preserving native argument boundaries, avoiding nested quoting failures, and handling common Windows automation traps around paths, SSH/WSL/Bash, encoding, and running executable locks.
 
-## Format
+## Repository Layout
 
-This repository uses a **multi-skill-compatible layout** even though it currently contains one skill:
+This is a single-skill repository using the same `skills/<skill-name>/` layout used by public skill collections:
 
 ```text
 .
@@ -22,16 +22,16 @@ This repository uses a **multi-skill-compatible layout** even though it currentl
             └── diagnostics.md
 ```
 
-The installable skill path is:
+The installable skill directory is:
 
 ```text
 skills/powershell-safe-skills
 ```
 
-This keeps the GitHub repository readable while keeping the skill folder name aligned with the `SKILL.md` name:
+The repository name, skill directory, Codex invocation, Claude Code invocation, and `SKILL.md` frontmatter all use the same name:
 
-```yaml
-name: powershell-safe-skills
+```text
+powershell-safe-skills
 ```
 
 ## PowerShell Version Scope
@@ -60,19 +60,23 @@ The core rules apply to both PowerShell 7+ and Windows PowerShell 5.1:
 
 ## Install In Codex
 
-Using the Codex skill installer:
+Codex can install a skill when you prompt it with the skill directory URL. In Codex, paste:
 
-```powershell
-python "$env:USERPROFILE\.codex\skills\.system\skill-installer\scripts\install-skill-from-github.py" `
-  --repo Ciender/powershell-safe-skills `
-  --path skills/powershell-safe-skills
+```text
+$skill-installer install https://github.com/Ciender/powershell-safe-skills/tree/main/skills/powershell-safe-skills
 ```
 
-Manual user install for Codex builds that scan `$env:USERPROFILE\.agents\skills`:
+You can also ask Codex in plain language:
+
+```text
+Install https://github.com/Ciender/powershell-safe-skills/tree/main/skills/powershell-safe-skills as a user-level Codex skill named powershell-safe-skills. Put the skill folder at $HOME/.agents/skills/powershell-safe-skills. Do not overwrite an existing install without asking.
+```
+
+Manual user-level install with `git clone`:
 
 ```powershell
 $repo = Join-Path $env:TEMP 'powershell-safe-skills-repo'
-$dest = "$env:USERPROFILE\.agents\skills\powershell-safe-skills"
+$dest = Join-Path $HOME '.agents\skills\powershell-safe-skills'
 
 Remove-Item -LiteralPath $repo -Recurse -Force -ErrorAction SilentlyContinue
 if (Test-Path -LiteralPath $dest) {
@@ -85,7 +89,7 @@ Copy-Item -LiteralPath (Join-Path $repo 'skills\powershell-safe-skills') -Destin
 Remove-Item -LiteralPath $repo -Recurse -Force
 ```
 
-Manual repo-scoped install for Codex builds that scan `.agents/skills`:
+Manual repo-level install:
 
 ```powershell
 $repo = Join-Path $env:TEMP 'powershell-safe-skills-repo'
@@ -108,15 +112,23 @@ Invoke explicitly in Codex with:
 $powershell-safe-skills
 ```
 
+Codex detects skill changes automatically. If the skill does not appear, restart Codex.
+
 ## Install In Claude Code
 
-Claude Code loads custom skills from filesystem directories containing `SKILL.md`. The directory name is the slash command name, so install the skill directory as `powershell-safe-skills`.
+Claude Code loads personal skills from `~/.claude/skills/<skill-name>/SKILL.md` and project skills from `.claude/skills/<skill-name>/SKILL.md`.
 
-Personal install:
+You can ask Claude Code in plain language:
+
+```text
+Install https://github.com/Ciender/powershell-safe-skills/tree/main/skills/powershell-safe-skills as a personal Claude Code skill named powershell-safe-skills. Put the skill folder at ~/.claude/skills/powershell-safe-skills. Do not overwrite an existing install without asking.
+```
+
+Manual personal install with `git clone`:
 
 ```powershell
 $repo = Join-Path $env:TEMP 'powershell-safe-skills-repo'
-$dest = "$env:USERPROFILE\.claude\skills\powershell-safe-skills"
+$dest = Join-Path $HOME '.claude\skills\powershell-safe-skills'
 
 Remove-Item -LiteralPath $repo -Recurse -Force -ErrorAction SilentlyContinue
 if (Test-Path -LiteralPath $dest) {
@@ -129,7 +141,7 @@ Copy-Item -LiteralPath (Join-Path $repo 'skills\powershell-safe-skills') -Destin
 Remove-Item -LiteralPath $repo -Recurse -Force
 ```
 
-Project install:
+Manual project install:
 
 ```powershell
 $repo = Join-Path $env:TEMP 'powershell-safe-skills-repo'
@@ -152,7 +164,7 @@ Invoke explicitly in Claude Code with:
 /powershell-safe-skills
 ```
 
-Claude Code uses `SKILL.md` and `references/`. The `agents/openai.yaml` file is Codex-facing metadata and can be ignored by Claude Code.
+Claude Code watches existing skill directories for `SKILL.md` changes. If the top-level skills directory did not exist when Claude Code started, restart Claude Code.
 
 ## Validate Locally
 
@@ -171,6 +183,7 @@ Skill is valid!
 ## References
 
 - Codex Agent Skills: https://developers.openai.com/codex/skills
+- Codex Customization: https://developers.openai.com/codex/concepts/customization
 - Claude Code Skills: https://code.claude.com/docs/en/skills
-- Agent Skills open format: https://agentskills.io/
+- Agent Skills open standard: https://agentskills.io/
 - Anthropic Skills examples: https://github.com/anthropics/skills
