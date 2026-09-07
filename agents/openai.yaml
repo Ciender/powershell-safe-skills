@@ -1,4 +1,4 @@
 interface:
   display_name: "PowerShell Safe Skills"
-  short_description: "Safe Windows PowerShell automation"
-  default_prompt: "Use $powershell-safe-skills to run this Windows PowerShell command safely."
+  short_description: "Preflight every Windows shell command hosted by PowerShell"
+  default_prompt: "Use $powershell-safe-skills before constructing or running this Windows shell command; rewrite unsafe PowerShell, native-argument, glob, pipeline, or cross-shell forms first."

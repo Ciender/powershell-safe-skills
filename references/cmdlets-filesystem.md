@@ -55,29 +55,27 @@ The same habit helps computed values:
 Get-ChildItem -LiteralPath $root | Select-Object -First ($count + 1)
 ```
 
-## Statement Output And Pipelines
+## Statement Output And Values
 
-PowerShell statements such as `foreach (...) { ... }` are not pipeline expressions. A pipe immediately after the closing brace can be parsed as an empty pipeline element.
-
-Avoid:
-
-```powershell
-foreach ($file in $files) {
-    [pscustomobject]@{ File = $file }
-} | Format-Table -AutoSize
-```
-
-Use a variable:
+`foreach`, `if`, and `switch` are statements. Capture their output before piping or embedding it; do not write `foreach (...) { ... } | ...` or `Drafts = (if (...) {...})`.
 
 ```powershell
 $rows = foreach ($file in $files) {
     [pscustomobject]@{ File = $file }
 }
-
 $rows | Format-Table -AutoSize
+
+$draftCount = if (Test-Path -LiteralPath $draftRoot) {
+    (Get-ChildItem -LiteralPath $draftRoot -Recurse -File).Count
+}
+else {
+    0
+}
+
+[pscustomobject]@{ Drafts = $draftCount }
 ```
 
-Or use `ForEach-Object` when the input is already a pipeline.
+Use `ForEach-Object` when input is already a pipeline. Use `$()` only when an inline statement subexpression is genuinely clearer.
 
 ## Literal Paths
 

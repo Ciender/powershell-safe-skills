@@ -66,6 +66,69 @@ Some tools define special nonzero success codes. Handle those contracts explicit
 
 Do not use `$LASTEXITCODE` for normal PowerShell cmdlet success.
 
+## Command Discovery
+
+Do not assume a developer tool is installed or visible on the current `PATH`:
+
+```powershell
+$tool = Get-Command 'rg' -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+if (-not $tool) {
+    throw 'Required executable rg was not found on PATH.'
+}
+
+& $tool.Source @nativeArgs
+```
+
+If multiple applications share a command name, choose one deterministically with `Select-Object -First 1` or verify the exact path. Otherwise `$tool.Source` can become an array of paths and fail as one invalid executable name. If a known installation path is required, verify it with `Test-Path -LiteralPath` before invocation. Do not repeatedly retry a missing command under different quoting.
+
+## Ripgrep Exit Codes
+
+`rg` uses exit code 1 for a successful search with no matches:
+
+```powershell
+& $rg @rgArgs
+$exitCode = $LASTEXITCODE
+
+if ($exitCode -gt 1) {
+    throw "rg failed with exit code $exitCode"
+}
+```
+
+Do not report an empty `rg` result as a PowerShell failure.
+
+## Native Globs
+
+Do not rely on PowerShell to expand `*.ext` for a native executable. A quoted path such as `C:\root\*.md` can reach the program literally and fail with Windows error 123.
+
+Use the native tool's glob option:
+
+```powershell
+$rgArgs = @('-n', $pattern, '-g', '*.md', $root)
+& $rg @rgArgs
+```
+
+For tools without a glob option, enumerate with `Get-ChildItem -LiteralPath` and pass each full path as a separate argument.
+
+## Git Working Directory
+
+Do not assume the current directory is a repository. Before chaining `status`, `log`, or `diff` in an arbitrary path, verify the root:
+
+```powershell
+$git = Get-Command 'git' -CommandType Application -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+if (-not $git) {
+    throw 'Required executable git was not found on PATH.'
+}
+
+& $git.Source '-C' $root 'rev-parse' '--is-inside-work-tree' 2>$null
+$exitCode = $LASTEXITCODE
+if ($exitCode -ne 0) {
+    throw "Not a Git repository: $root"
+}
+```
+
+Stop after a failed preflight instead of running several follow-on Git commands that produce duplicate errors.
+
 ## JSON Payloads
 
 Do not hand-escape JSON. Build objects and serialize:
@@ -86,6 +149,12 @@ If the JSON is consumed from a file, write with explicit encoding:
 ```powershell
 $json | Set-Content -LiteralPath $jsonPath -Encoding utf8NoBOM
 ```
+
+## Secrets Are Not Arguments
+
+Do not place API keys, tokens, cookies, passwords, or private keys in native command arguments. Arguments can be exposed through process inspection, terminal history, and retained automation logs.
+
+Prefer environment variables scoped to the child process, standard input when the target explicitly supports secure input, credential stores, or key/agent-based authentication. Never invent a quoted inline-password workaround.
 
 ## Avoid These Forms
 

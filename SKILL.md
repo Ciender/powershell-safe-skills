@@ -1,27 +1,29 @@
 ---
 name: powershell-safe-skills
-description: Use when writing or running PowerShell automation on Windows, primarily PowerShell 7+ via pwsh.exe with compatibility checks for Windows PowerShell 5.1, especially native programs, quoted paths, escaping, Start-Process, ProcessStartInfo, file operations, SSH/WSL/Bash calls, JSON/regex quoting, encoding/BOM/Chinese text, running exe locks, mapped drives, or shell troubleshooting.
+description: Use before any Windows shell command hosted by PowerShell or pwsh, even when the user does not mention PowerShell. Prevents common PowerShell 7 and Windows PowerShell 5.1 failures involving native arguments, foreach/pipelines, quoting, globs, SSH/Plink/WSL/Bash/SQL, encoding, paths, processes, and file locks.
 ---
 
 # PowerShell Safe Skills
 
-Use this skill as a compact execution checklist for PowerShell-driven automation. Preserve argument boundaries; do not squeeze structured commands into nested quoted strings.
+Use this checklist before constructing a Windows shell command. Prefer PowerShell 7 through `pwsh.exe`; use `powershell.exe` only when Windows PowerShell 5.1 is explicitly required.
 
-## Decision Order
+## Choose The Execution Form
 
-Choose the first safe option that fits:
+Use the first option that fits:
 
 1. PowerShell cmdlet.
-2. Native command with `& $exe @nativeArgs`.
-3. Temporary `.ps1` with `pwsh.exe -NoLogo -NoProfile -NonInteractive -File script.ps1`.
-4. `ProcessStartInfo.ArgumentList`.
-5. `Start-Process` only for elevation, new/hidden windows, detached launch, or shell behavior.
-6. `cmd.exe /c` only when cmd semantics are required.
+2. Native executable with `& $exe @nativeArgs`.
+3. Temporary `.ps1` or target-language source file for multiline or quote-heavy code.
+4. `ProcessStartInfo.ArgumentList` when a separate process needs exact argument boundaries or captured streams.
+5. `Start-Process` only for elevation, window behavior, detachment, or shell association.
+6. `cmd.exe /c` only for required cmd/batch semantics.
 7. `Invoke-Expression` only as a last resort for trusted PowerShell source.
 
 ## Verify The Shell
 
-Assume PowerShell 7+ through `pwsh.exe` is the preferred runtime. Use Windows PowerShell 5.1 through `powershell.exe` only when explicitly required, and verify syntax because cmdlet parameters and native argument behavior can differ.
+PowerShell 7 (`pwsh.exe`) is the preferred runtime. Use Windows PowerShell 5.1
+(`powershell.exe`) only when compatibility requires it, and verify the active
+shell because cmdlet parameters and native argument behavior can differ.
 
 ```powershell
 $PSVersionTable.PSVersion
@@ -30,17 +32,30 @@ Get-Command pwsh -ErrorAction SilentlyContinue
 Get-Command powershell -ErrorAction SilentlyContinue
 ```
 
-Do not assume `powershell.exe` is PowerShell 7. On Windows, `pwsh.exe` is PowerShell 7 and `powershell.exe` is Windows PowerShell 5.1.
+## Mandatory Preflight
+
+- Keep each native argument as one array item. Never flatten a command into one quoted string.
+- Capture `$LASTEXITCODE` immediately after native commands; use `-ErrorAction Stop` for cmdlets. Apply the program's exit-code contract—`rg` code 1 means no matches.
+- Capture output from `foreach`, `if`, or `switch` before piping or embedding it. `foreach (...) { ... } | ...` is invalid.
+- Never use Bash heredocs such as `python - <<'PY'` in PowerShell. Pipe a literal here-string to the interpreter or use a file.
+- Backslash does not escape quotes in PowerShell. If regex, JSON, SQL, or nested quotes become difficult to inspect, use a file instead of adding escapes.
+- Do not rely on native wildcard expansion. Use the tool's glob option, such as `rg -g '*.md' $root`, or enumerate paths first.
+- Resolve one concrete executable before using `.Source`: `Get-Command ... -CommandType Application | Select-Object -First 1`.
+- Use `-LiteralPath` for real paths. Verify required paths before dependent operations and verify boundaries before recursive mutation.
+- Do not put passwords, tokens, cookies, or private keys in command arguments. For SSH/Plink/WSL/Bash/SQL, send literal scripts through stdin and use key/agent or another secure credential mechanism.
 
 ## Native Command Template
 
-Use an argument array. Do not build one command string.
-
 ```powershell
-$exe = 'C:\Path With Spaces\tool.exe'
+$exe = Get-Command 'tool' -CommandType Application -ErrorAction SilentlyContinue |
+    Select-Object -First 1 -ExpandProperty Source
+if (-not $exe) {
+    throw 'Required executable tool was not found.'
+}
+
 $nativeArgs = @(
     '--input'
-    'C:\Data Folder\input.json'
+    'C:\Path With Spaces\input.json'
     '--empty'
     ''
 )
@@ -52,59 +67,23 @@ if ($exitCode -ne 0) {
 }
 ```
 
-Required habits:
+Do not use `$args` as a custom variable name. Omitted arguments, `''`, and `$null` have different meanings.
 
-- Treat every native argument as one array item.
-- Invoke executable paths stored in variables with `&`.
-- Capture `$LASTEXITCODE` immediately.
-- Do not use `$args` as your own array name; it is a PowerShell automatic variable.
-- Do not add `cmd.exe /c` merely to launch an executable.
-- Do not use Bash-style `\"` escaping in PowerShell.
-- Do not silently remove empty arguments; omitted argument, `''`, and `$null` are different.
+## PowerShell-Specific Traps
 
-## Cmdlets And Paths
+- Group computed parameter values: `Select-Object -Index (100..120)`.
+- Common parameters such as `-ErrorAction` apply to cmdlets and advanced functions, not .NET method calls.
+- Delimit variables before a colon: `"${name}: value"`, or use the `-f` operator.
+- `$powershell-safe-skills` is Codex chat syntax, not a command for a `PS>` prompt. In PowerShell, `$name` denotes a variable.
+- Prefer UTF-8 without BOM for cross-platform source and data. Mojibake in the terminal does not prove file corruption.
+- Treat file locks separately from syntax errors. Do not stop unrelated processes merely to read a locked file.
 
-Use splatting for cmdlets and `-LiteralPath` for real paths unless wildcard expansion is intentional.
+## Load Only The Relevant Reference
 
-```powershell
-$params = @{
-    LiteralPath = 'C:\Data[1]\input.txt'
-    Destination = 'C:\Output'
-    Force       = $true
-    ErrorAction = 'Stop'
-}
-
-Copy-Item @params
-```
-
-Required habits:
-
-- Use `$ErrorActionPreference = 'Stop'` or `-ErrorAction Stop` for cmdlet failures.
-- Do not use `$LASTEXITCODE` to test a normal cmdlet.
-- Wrap computed parameter values: use `Select-Object -Index (100..120)`, not `-Index 100..120`.
-- Do not pipe directly from `foreach (...) { ... } | ...`; assign the output first or use `ForEach-Object`.
-- Before recursive delete, move, or overwrite, resolve absolute root and target paths and verify the target is inside the intended root.
-- Mapped drives are per user/session. If automation cannot see `X:\...`, check `whoami` and `Get-PSDrive`, then use a UNC path or the same-user session.
-
-## When To Load References
-
-- `references/native-commands.md`: native tools such as Git, SSH, Python, Cargo, Docker, argument arrays, exit codes, JSON payloads.
-- `references/cmdlets-filesystem.md`: cmdlet splatting, parameter expressions, `foreach` pipelines, `-LiteralPath`, recursive mutation, mapped drives.
-- `references/cross-shell.md`: `pwsh -Command`, SSH, WSL, Bash, here-strings, cmd.exe, batch files, stop-parsing, environment variables.
-- `references/process-encoding.md`: `Start-Process`, `ProcessStartInfo`, stdout/stderr capture, UTF-8/BOM/Chinese text, binary files, Windows exe locks.
-- `references/diagnostics.md`: symptom table and step-by-step simplification when invocation corruption occurs.
-
-## Immediate Red Flags
-
-Use a `.ps1` file or a PowerShell here-string when a command contains multiline code, nested quotes, JSON, XML, regex, pipes, redirection, SSH remote scripts, WSL/Bash scripts, `$()`, `$VAR`, `%VAR%`, or non-ASCII paths/output.
-
-PowerShell parses before SSH, WSL, Bash, Python, Git, or Docker receive arguments. Do not write Bash heredocs directly in PowerShell:
-
-```powershell
-# Wrong in PowerShell
-python - <<'PY'
-```
-
-For cross-platform source, Markdown, YAML, and JSON, prefer UTF-8 without BOM. Terminal mojibake does not prove file corruption; inspect bytes or read with explicit encoding.
-
-Windows cannot overwrite a running `.exe`. If a build fails with access denied on `target\debug\*.exe`, find and stop the old process before rebuilding.
+- `references/native-commands.md`: native arguments, discovery, globs, exit codes, JSON, and secrets.
+- `references/cmdlets-filesystem.md`: cmdlet errors, statement output, literal paths, recursive mutation, and mapped drives.
+- `references/cross-shell.md`: nested PowerShell, here-strings, SSH/Plink/WSL/Bash/SQL, cmd, and environment variables.
+- `references/process-encoding.md`: process launch/capture, UTF-8/BOM, binary data, Chinese text, and file locks.
+- `references/diagnostics.md`: symptom lookup and command simplification after a failure.
+- `references/history-derived-failures.md`: maintenance/evaluation summary of the historical failure patterns that drove these rules. Do not load for routine command execution.
+- `references/history-evidence.md`: detailed audit evidence and provenance. Do not load for routine command execution.

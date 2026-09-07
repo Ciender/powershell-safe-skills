@@ -1,45 +1,26 @@
 # Cross-Shell Boundaries
 
-Use this reference when PowerShell calls another shell or interpreter: `pwsh -Command`, SSH, WSL, Bash, Python stdin scripts, cmd.exe, batch files, or tools that interpret `$`, quotes, pipes, and redirection.
+Use this reference when PowerShell calls another shell or interpreter.
 
-## Parser Layers
+## Reduce Parser Layers
 
-A generated command can pass through several parsers:
+Commands may pass through JSON/host escaping, PowerShell, a native argument parser, and then SSH, WSL, Bash, Python, Git, Docker, or SQL. Each layer can reinterpret quotes, backslashes, dollar signs, pipes, redirection, and Unicode.
 
-```text
-Codex / tool call
-  -> JSON or host escaping
-  -> PowerShell
-  -> native program argument parser
-  -> ssh / wsl / python / git / docker
-  -> remote shell or target program
-```
-
-Each layer can reinterpret quotes, backslashes, dollar signs, backticks, pipes, redirection, parentheses, JSON, regular expressions, and Unicode text.
-
-When a command crosses several parsers, stop adding quotes and write a `.ps1` file or pipe a here-string to the target interpreter.
+PowerShell does not use `\"` to escape a double quote. Prefer single-quoted literals and argument arrays. When content is multiline or quote-heavy, stop escaping and use a `.ps1`, target-language file, or literal here-string.
 
 ## Nested PowerShell
 
-If an outer PowerShell process invokes another PowerShell process with `-Command`, the outer process expands `$variables` before the child process sees the script.
-
-Short snippet:
+An outer PowerShell expands variables in a double-quoted child `-Command` before the child sees them. Use an outer single-quoted snippet only for short code:
 
 ```powershell
 pwsh.exe -NoLogo -NoProfile -Command '$p = "C:\Data Folder\input.txt"; Test-Path -LiteralPath $p'
 ```
 
-Prefer `-File` for anything substantial:
+Use `pwsh.exe -NoLogo -NoProfile -NonInteractive -File script.ps1` for anything substantial. Do not launch another PowerShell merely to run code that can execute in the current process.
 
-```text
-pwsh.exe -NoLogo -NoProfile -NonInteractive -File script.ps1
-```
+## Here-Strings And Interpreter Stdin
 
-Do not start another PowerShell process merely to run a small snippet that can run in the current process.
-
-## Here-Strings
-
-Literal multiline text:
+Literal here-strings do not expand PowerShell variables:
 
 ```powershell
 $text = @'
@@ -49,58 +30,9 @@ $text = @'
 '@
 ```
 
-Expanded multiline text:
+The opening marker must end its line; the closing marker must be alone at the start of a line.
 
-```powershell
-$text = @"
-Name: $name
-"@
-```
-
-The opening `@'` or `@"` must be the last tokens on its line. The closing terminator must appear alone at the start of a line.
-
-## SSH Remote Bash
-
-Wrong:
-
-```powershell
-ssh root@example.com "backup=/opt/app/app.backup.$(date +%Y%m%d%H%M%S)"
-```
-
-Here `$()` is expanded by local PowerShell before remote Bash sees it.
-
-Simple remote Bash:
-
-```powershell
-ssh root@example.com 'backup=/opt/app/app.backup.$(date +%Y%m%d%H%M%S); echo "$backup"'
-```
-
-Complex remote Bash:
-
-```powershell
-$script = @'
-set -e
-backup=/opt/app/app.backup.$(date +%Y%m%d%H%M%S)
-systemctl stop app.service
-cp -a /opt/app/app "$backup"
-install -o root -g root -m 755 /tmp/app.new /opt/app/app
-systemctl start app.service
-'@
-
-$script | ssh root@example.com 'bash -s'
-```
-
-## WSL And Bash
-
-Do not write Bash heredocs directly in PowerShell:
-
-```powershell
-python - <<'PY'
-print("hello")
-PY
-```
-
-Use a PowerShell here-string instead:
+Bash heredocs are not PowerShell syntax. Replace `python - <<'PY'` with:
 
 ```powershell
 @'
@@ -108,37 +40,42 @@ print("hello")
 '@ | python -
 ```
 
-Complex WSL command:
+## SSH, Plink, WSL, Bash, And SQL
+
+Do not combine local interpolation, remote variables, SQL quoting, and credentials in one command string. Send a literal script through stdin:
 
 ```powershell
-$script = @'
-set -e
-cd /mnt/c/project
-cargo build --release
+$remoteScript = @'
+set -euo pipefail
+cd /opt/app
+psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 <<'SQL'
+SELECT current_database(), current_user;
+SQL
 '@
 
-$script | wsl -d Ubuntu -- bash -s
+$remoteHost = 'remote-host'
+$remoteScript | ssh $remoteHost 'bash -s'
+$exitCode = $LASTEXITCODE
+if ($exitCode -ne 0) {
+    throw "Remote script failed with exit code $exitCode"
+}
 ```
 
-## cmd.exe, Batch, And Stop-Parsing
+The same stdin pattern applies to `plink` and `wsl -- bash -s`. Use SSH keys or an agent; never put passwords in `plink -pw` or secrets in command arguments and generated logs.
 
-Use `cmd.exe /c` only when cmd-specific behavior is necessary:
+## cmd.exe And Batch Files
 
-- cmd built-ins
-- required `.cmd` or `.bat` semantics
-- cmd-specific expansion or redirection
+Use `cmd.exe /c` only for cmd built-ins, required `.cmd`/`.bat` behavior, or cmd-specific expansion/redirection. PowerShell 7 already supports `&&` and `||`.
 
-PowerShell 7 supports `command1 && command2` and `command1 || command2`.
+Avoid `--%` unless a fixed literal Windows-native command cannot be represented with an argument array. It disables normal PowerShell parsing for the rest of the command.
 
-Avoid `--%` by default. It is Windows-specific and disables normal PowerShell parsing for the rest of the command. Use it only for a fixed literal native command that cannot be expressed reliably with an argument array.
+## Environment And Invocation Syntax
 
-## Environment Variables
+Use `$env:NAME`; `%NAME%` is cmd syntax. A child process cannot modify its parent PowerShell environment.
 
-PowerShell syntax:
+`$powershell-safe-skills` belongs in Codex chat. At a `PS>` prompt, invoke an executable directly or use a non-hyphenated variable with the call operator:
 
 ```powershell
-$env:NAME
-$env:NAME = 'value'
+$skillInstaller = 'C:\Tools\skill-installer.exe'
+& $skillInstaller 'install' $url
 ```
-
-Do not use `%NAME%` inside PowerShell. Changes made by a child process do not propagate back to its parent PowerShell process.

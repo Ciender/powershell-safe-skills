@@ -136,7 +136,25 @@ For binary data, use byte APIs:
 
 Do not use text cmdlets for images, archives, executables, or other binary files.
 
-## Windows Running Exe Locks
+## Windows File Locks
+
+Windows file sharing is chosen by the process that opens a file. Any file—not only an executable—can reject reads, hashes, copies, moves, or overwrites while another process holds an incompatible handle.
+
+For read-only inspection, handle failures per file instead of aborting the whole scan:
+
+```powershell
+$rows = foreach ($path in $paths) {
+    try {
+        $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256 -ErrorAction Stop).Hash
+        [pscustomobject]@{ Path = $path; Hash = $hash; ReadError = $null }
+    }
+    catch {
+        [pscustomobject]@{ Path = $path; Hash = $null; ReadError = $_.Exception.Message }
+    }
+}
+```
+
+If the data contract permits a consistent snapshot, copy to a new path first and inspect the copy. Do not stop unrelated processes merely to read a file.
 
 Windows cannot overwrite a running executable. Common failure:
 
@@ -145,11 +163,12 @@ failed to remove file target\debug\app.exe
 Access is denied. (os error 5)
 ```
 
-Find and stop the old process:
+Find and stop the authorized stale process before rebuilding:
 
 ```powershell
-Get-Process | Where-Object { $_.ProcessName -like '*app*' }
-Stop-Process -Id <pid>
+$staleProcessId = 1234
+Get-Process -Id $staleProcessId
+Stop-Process -Id $staleProcessId
 ```
 
-Before automated builds, ensure the target executable is not held by a previous `cargo run`, test process, or background service.
+Confirm that the process is the intended build/test instance before stopping it.
